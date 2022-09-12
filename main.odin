@@ -43,9 +43,9 @@ PROGRAMNAME :: "Program"
 // GL_VERSION define the version of OpenGL to use. Here we use 4.6 which is the newest version
 // You might need to lower this to 3.3 depending on how old your graphics card is.
 // Constant with explicit type for example
-GL_MAJOR_VERSION : c.int : 4
+GL_MAJOR_VERSION : c.int : 3
 // Constant with type inference
-GL_MINOR_VERSION :: 6
+GL_MINOR_VERSION :: 3
 
 // Our own boolean storing if the application is running
 // We use b32 for allignment and easy compatibility with the glfw.WindowShouldClose procedure
@@ -123,47 +123,44 @@ main :: proc() {
 	
 	init()
 
-
-	vertex_shader: u32
-	gl.CreateShader(gl.VERTEX_SHADER)
+	vertex_shader: u32 = gl.CreateShader(gl.VERTEX_SHADER)
 
 	// TODO: read in file
-	shader_src: cstring = `#version 460 core
+	shader_src: cstring = `#version 330 core
 		layout (location = 0) in vec3 aPos;
 		void main()
 		{
 		   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
-		}\0`
+		}`
 
 	gl.ShaderSource(vertex_shader, 1, &shader_src, nil)
 	gl.CompileShader(vertex_shader)
 
 	success: i32
-	info_log: [512]byte
+	info_log: [512]u8
 	gl.GetShaderiv(vertex_shader, gl.COMPILE_STATUS, &success)
-	if success != 0 {
+	if success == 0 {
 		gl.GetShaderInfoLog(vertex_shader, 512, nil, &info_log[0])
-		fmt.println("Error, shader compilation failed: ", string(info_log[0:len(info_log) - 1]))
+		fmt.println(info_log)
+		fmt.printf("Error, vertex shader compilation failed: %s", string(info_log[:]))
 		return
 	}
 
-	fragment_shader: u32
-	fragment_shader = gl.CreateShader(gl.FRAGMENT_SHADER)
-
-	fragment_src: cstring = `#version 460 core
-		layout (location = 0) in vec3 aPos;
+	fragment_shader: u32 = gl.CreateShader(gl.FRAGMENT_SHADER)
+	fragment_src: cstring = `#version 330 core
+		out vec4 FragColor;
 		void main()
 		{
-		   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
-		}\0`
+		   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
+		}`
 	
-	gl.ShaderSource(fragment_shader, 1, &shader_src, nil)
+	gl.ShaderSource(fragment_shader, 1, &fragment_src, nil)
 	gl.CompileShader(fragment_shader)
 
-	gl.GetShaderiv(vertex_shader, gl.COMPILE_STATUS, &success)
-	if success != 0 {
-		gl.GetShaderInfoLog(vertex_shader, 512, nil, &info_log[0])
-		fmt.println("Error, shader compilation failed: ", string(info_log[0:len(info_log) - 1]))
+	gl.GetShaderiv(fragment_shader, gl.COMPILE_STATUS, &success)
+	if success == 0 {
+		gl.GetShaderInfoLog(fragment_shader, 512, nil, &info_log[0])
+		fmt.printf("Error, fragment shader compilation failed: %s", string(info_log[:]))
 		return
 	}
 
@@ -178,19 +175,30 @@ main :: proc() {
 	gl.DeleteShader(fragment_shader)
 
 
-	vertices := [9]f32 {
-		-0.5, -0.5, 0.0,
-		 0.5, -0.5, 0.0,
-		 0.0,  0.5, 0.0,
+	vertices := [12]f32 {
+	 0.5,  0.5, 0.0,  // top right
+     0.5, -0.5, 0.0,  // bottom right
+    -0.5, -0.5, 0.0,  // bottom left
+    -0.5,  0.5, 0.0   // top left 
 	}
 
-	vao, vbo: u32
+	indices : = [6]u32 {
+		0, 1, 3, // first triangle
+		1, 2, 3 // second triangle
+	}
+
+	vao, vbo, ebo: u32
 	gl.GenVertexArrays(1, &vao)
 	gl.GenBuffers(1, &vbo)
+	gl.GenBuffers(1, &ebo)
+
 	gl.BindVertexArray(vao)
 
 	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
 	gl.BufferData(gl.ARRAY_BUFFER, size_of (vertices), &vertices, gl.STATIC_DRAW)
+
+	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo)
+	gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, size_of(indices), &indices, gl.STATIC_DRAW)
 
 	gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 3 * size_of(f32), 0);
 	gl.EnableVertexAttribArray(0)
@@ -198,6 +206,8 @@ main :: proc() {
 	gl.BindBuffer(gl.ARRAY_BUFFER, 0)
 	
 	gl.BindVertexArray(0)
+
+	gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
 	
 	// There is only one kind of loop in Odin called for
 	// https://odin-lang.org/docs/overview/#for-statement
@@ -207,10 +217,14 @@ main :: proc() {
 		glfw.PollEvents()
 		
 		update()
-		draw()
+
+		gl.ClearColor(0.2, 0.3, 0.3, 1.0)
+		gl.Clear(gl.COLOR_BUFFER_BIT)
+
 		gl.UseProgram(shader_program)
 		gl.BindVertexArray(vao)
-		gl.DrawArrays(gl.TRIANGLES, 0, 3)
+
+		gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
 
 		// This function swaps the front and back buffers of the specified window.
 		// See https://en.wikipedia.org/wiki/Multiple_buffering to learn more about Multiple buffering
@@ -232,12 +246,6 @@ update :: proc(){
 }
 
 draw :: proc(){
-	// Set the opengl clear color
-	// 0-1 rgba values
-	gl.ClearColor(0.2, 0.3, 0.3, 1.0)
-	// Clear the screen with the set clearcolor
-	gl.Clear(gl.COLOR_BUFFER_BIT)
-
 	// Own drawing code here
 }
 
