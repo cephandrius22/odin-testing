@@ -123,14 +123,81 @@ main :: proc() {
 	
 	init()
 
+
+	vertex_shader: u32
+	gl.CreateShader(gl.VERTEX_SHADER)
+
+	// TODO: read in file
+	shader_src: cstring = `#version 460 core
+		layout (location = 0) in vec3 aPos;
+		void main()
+		{
+		   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
+		}\0`
+
+	gl.ShaderSource(vertex_shader, 1, &shader_src, nil)
+	gl.CompileShader(vertex_shader)
+
+	success: i32
+	info_log: [512]byte
+	gl.GetShaderiv(vertex_shader, gl.COMPILE_STATUS, &success)
+	if success != 0 {
+		gl.GetShaderInfoLog(vertex_shader, 512, nil, &info_log[0])
+		fmt.println("Error, shader compilation failed: ", string(info_log[0:len(info_log) - 1]))
+		return
+	}
+
+	fragment_shader: u32
+	fragment_shader = gl.CreateShader(gl.FRAGMENT_SHADER)
+
+	fragment_src: cstring = `#version 460 core
+		layout (location = 0) in vec3 aPos;
+		void main()
+		{
+		   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
+		}\0`
+	
+	gl.ShaderSource(fragment_shader, 1, &shader_src, nil)
+	gl.CompileShader(fragment_shader)
+
+	gl.GetShaderiv(vertex_shader, gl.COMPILE_STATUS, &success)
+	if success != 0 {
+		gl.GetShaderInfoLog(vertex_shader, 512, nil, &info_log[0])
+		fmt.println("Error, shader compilation failed: ", string(info_log[0:len(info_log) - 1]))
+		return
+	}
+
+	shader_program: u32
+	shader_program = gl.CreateProgram();
+
+	gl.AttachShader(shader_program, vertex_shader)
+	gl.AttachShader(shader_program, fragment_shader)
+	gl.LinkProgram(shader_program)
+
+	gl.DeleteShader(vertex_shader)
+	gl.DeleteShader(fragment_shader)
+
+
 	vertices := [9]f32 {
 		-0.5, -0.5, 0.0,
 		 0.5, -0.5, 0.0,
 		 0.0,  0.5, 0.0,
 	}
 
-	vbo: u32
+	vao, vbo: u32
+	gl.GenVertexArrays(1, &vao)
 	gl.GenBuffers(1, &vbo)
+	gl.BindVertexArray(vao)
+
+	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
+	gl.BufferData(gl.ARRAY_BUFFER, size_of (vertices), &vertices, gl.STATIC_DRAW)
+
+	gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 3 * size_of(f32), 0);
+	gl.EnableVertexAttribArray(0)
+
+	gl.BindBuffer(gl.ARRAY_BUFFER, 0)
+	
+	gl.BindVertexArray(0)
 	
 	// There is only one kind of loop in Odin called for
 	// https://odin-lang.org/docs/overview/#for-statement
@@ -141,6 +208,9 @@ main :: proc() {
 		
 		update()
 		draw()
+		gl.UseProgram(shader_program)
+		gl.BindVertexArray(vao)
+		gl.DrawArrays(gl.TRIANGLES, 0, 3)
 
 		// This function swaps the front and back buffers of the specified window.
 		// See https://en.wikipedia.org/wiki/Multiple_buffering to learn more about Multiple buffering
@@ -164,7 +234,7 @@ update :: proc(){
 draw :: proc(){
 	// Set the opengl clear color
 	// 0-1 rgba values
-	gl.ClearColor(0.9, 0.3, 0.3, 1.0)
+	gl.ClearColor(0.2, 0.3, 0.3, 1.0)
 	// Clear the screen with the set clearcolor
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 
